@@ -1,41 +1,62 @@
 import numpy as np
-
-from pandas import DataFrame
-
+import pandas as pd
 
 class Node:
-    def __init__(self) -> None:
-        self.node_id = str(id(self))[7:] # Identity of an object, i.e., a Node
+    def __init__(self, n_weights: int) -> None:
+        # Identity of an object, i.e., a Node
+        self.node_id = str(id(self))[7:]
         
-        self.weight = np.random.uniform(low=0.0, high=1.0, size=None)
-        self.bias = np.random.uniform(low=0.0, high=10.0, size=None)
+        # Create random weights that match the number of inputs
+        # TODO optimize later
+        # 1 bias per node and n weights for each corresponding input per node
+        self.weights = np.random.uniform(low=-1.0, high=1.0, size=n_weights) 
+        self.bias = 0 # np.random.uniform(low=0.0, high=10.0, size=None)
         
-        self.node_val = 0
-
     def __str__(self) -> str:
-        return f"Node {self.node_id}"
-
-    def activation_function(self, *args):
-        for in_value in args:
-            self.node_val += self.__step_activation(in_value)
+        return f"Node {self.node_id}|{len(self.weights)}"
     
-    def __step_activation(self, arg):
-        pass
-
-    def __sigmoid_activation(self, arg):
-        pass
-
-    def __relU_activation(self, arg):
-        pass
+    def out(self, input_):
+        return np.sum(self.weights*input_) + self.bias
 
 
-class NerualNetwork():
-    def __init__(self, n_nodes, n_layers) -> None:
-        self.hidden_layers = self._construct_hidden_layers(n_nodes, n_layers)
+class NeuralNetwork():
+    def __init__(self, n_inputs, hidden_layers_struct, n_outputs) -> None:
+        self.inputs = n_inputs
+        self.outputs = n_outputs
+        
+        self.network_structure = [n_inputs] + hidden_layers_struct
+        
+        self.hidden_layers = self.__construct_hidden_layers__()
     
-    def __str__(self) -> str:
-        return str(DataFrame(self.hidden_layers))
-
+    def show_structure(self) -> str:
+        print("Info: ", len(self.hidden_layers), " hidden layers")
+        
+        for indx, layer in enumerate(self.hidden_layers):
+            print(f"Hidden layer {indx + 1} has {len(layer)} nodes: \n", 
+                  np.array(
+                      [f"Node {n.node_id}|{len(n.weights)} weights" for n in layer]
+                  ).reshape(-1,1), '\n')
+    
+    def __construct_hidden_layers__(self):
+        weights = [i for i in self.network_structure]
+        matrix = []
+        
+        for layer in self.network_structure[1:len(self.network_structure)]:
+            n_weights = weights.pop(0)
+            matrix.append([Node(n_weights) for n in range(layer)])
+        return np.array(matrix, dtype=object)
+    
+    def forward_propagate(self, input_, layer=0):
+        if layer == len(self.hidden_layers):
+            return input_
+        else:
+            layer_output = []
+            for node in self.hidden_layers[layer]:
+                layer_output.append(node.out(input_))
+            print(f"Layer {layer} input: \n", input_)
+            print(f"Layer {layer} output: \n", layer_output, "\n")
+            return self.forward_propagate(layer_output, layer+1)
+    
     def _input_layer_manual(self, *args):
         nodes = list() #empty list
 
@@ -54,24 +75,10 @@ class NerualNetwork():
         print("Input nodes", nodes)
         return nodes
 
-    def _input_layer_from_source(self, *args):
-        return [args]
-
-    def _construct_hidden_layers(self, n_nodes, n_layers):
-        matrix = [[Node() for _ in range(n_nodes)] for _ in range(n_layers)]
-        return matrix
-
-    def _output_layer(self):
-        pass
-
 
 if __name__ == '__main__':
-    nn = NerualNetwork(5,5)
-    print(nn)
 
-    while True:
-        x = input("Continue? (y/n) ")
-        if x == 'n':
-            break
-        
-        # nodes = nn._input_layer_manual()
+    inp = [1,2,3,4]
+    node = Node(inp)
+    print(node.do())
+
