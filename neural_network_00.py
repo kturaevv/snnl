@@ -16,7 +16,7 @@ class Node:
         return f"Node {self.node_id}|{len(self.weights)}"
     
     def out(self, input_):
-        return np.sum(self.weights*input_) + self.bias
+        return np.dot(self.weights,input_) + self.bias
 
 
 class NeuralNetwork():
@@ -27,7 +27,7 @@ class NeuralNetwork():
         self.network_structure = [n_inputs] + hidden_layers_struct
         
         self.hidden_layers = self.__construct_hidden_layers__()
-    
+
     def show_structure(self) -> str:
         print("Info: ", len(self.hidden_layers), " hidden layers")
         
@@ -46,15 +46,18 @@ class NeuralNetwork():
             matrix.append([Node(n_weights) for n in range(layer)])
         return np.array(matrix, dtype=object)
     
-    def forward_propagate(self, input_, layer=0):
+    def forward_propagate(self, input_, layer=0, verbose = False):
         if layer == len(self.hidden_layers):
             return input_
         else:
             layer_output = []
             for node in self.hidden_layers[layer]:
                 layer_output.append(node.out(input_))
-            print(f"Layer {layer} input: \n", input_)
-            print(f"Layer {layer} output: \n", layer_output, "\n")
+                
+            if verbose:
+                print(f"Layer {layer} input: \n", input_)
+                print(f"Layer {layer} output: \n", layer_output, "\n")
+                
             return self.forward_propagate(layer_output, layer+1)
     
     def _input_layer_manual(self, *args):
