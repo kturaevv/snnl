@@ -42,7 +42,25 @@ class Layer_Dense:
 
         self.dinputs = np.dot(dvalues, self.weights.T)
 
-        
+# Dropout
+class Layer_Dropout :
+    def __init__ ( self , rate ):
+        # Store rate, we invert it as for example for dropout
+        # of 0.1 we need success rate of 0.9
+        self.rate = 1 - rate
+
+    def forward ( self , inputs ):
+        self.inputs = inputs
+        # Generate and save scaled mask
+        self.binary_mask = np.random.binomial( 1 , self.rate,
+        size = inputs.shape) / self.rate
+        # Apply mask to output values
+        self.output = inputs * self.binary_mask
+
+    def backward ( self , dvalues ):
+        self.dinputs = dvalues * self.binary_mask
+
+
 class Activation_ReLU:
     def forward(self, inputs):
         self.inputs = inputs
@@ -220,7 +238,7 @@ class Optimizer_Adagrad :
         self.iterations = 0
         self.epsilon = epsilon
 
-    def pre_update_params ( self ):
+    def pre_update_params(self):
         if self.decay:
             self.current_learning_rate = self.learning_rate * \
             ( 1. / ( 1. + self.decay * self.iterations))
@@ -243,7 +261,7 @@ class Optimizer_Adagrad :
             layer.dbiases / \
             (np.sqrt(layer.bias_cache) + self.epsilon)
     
-    def post_update_params ( self ):
+    def post_update_params(self):
         self.iterations += 1
     
 class Optimizer_RMSprop:
@@ -257,13 +275,13 @@ class Optimizer_RMSprop:
         self.rho = rho
     
     # Call once before any parameter updates
-    def pre_update_params ( self ):
+    def pre_update_params (self):
         if self.decay:
             self.current_learning_rate = self.learning_rate * \
             ( 1. / ( 1. + self.decay * self.iterations))
     
-    def update_params ( self , layer ):
-        if not hasattr (layer, 'weight_cache' ):
+    def update_params(self, layer):
+        if not hasattr(layer, 'weight_cache'):
             layer.weight_cache = np.zeros_like(layer.weights)
             layer.bias_cache = np.zeros_like(layer.biases)
 
@@ -279,7 +297,7 @@ class Optimizer_RMSprop:
         layer.biases += - self.current_learning_rate * \
             layer.dbiases / (np.sqrt(layer.bias_cache) + self.epsilon)
     
-    def post_update_params ( self ):
+    def post_update_params(self):
         self.iterations += 1
 
 
@@ -295,13 +313,13 @@ class Optimizer_Adam:
         self.beta_2 = beta_2
     
     # Call once before any parameter updates
-    def pre_update_params ( self ):
+    def pre_update_params(self):
         if self.decay:
             self.current_learning_rate = self.learning_rate * \
             ( 1. / ( 1. + self.decay * self.iterations))
     
-    def update_params ( self , layer ):
-        if not hasattr (layer, 'weight_cache' ):
+    def update_params(self, layer):
+        if not hasattr(layer, 'weight_cache'):
             layer.weight_cache = np.zeros_like(layer.weights)
             layer.weight_momentums = np.zeros_like(layer.weights)
             
@@ -338,5 +356,5 @@ class Optimizer_Adam:
         layer.biases += - self.current_learning_rate * \
             bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsilon)
     
-    def post_update_params ( self ):
+    def post_update_params(self):
         self.iterations += 1
