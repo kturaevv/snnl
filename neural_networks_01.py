@@ -94,6 +94,16 @@ class Activation_Softmax:
             self.dinputs[index] = np.dot(jacobian_matrix,
             single_dvalues)
 
+
+class Activation_Sigmoid:
+
+    def forward(self, inputs):
+        self.inputs = inputs
+        self.output = 1 / (1 + np.ext(-inputs))
+    
+    def backward(self, dvalues):
+        self.dinputs = dvalues * (1 - self.output) * self.output
+        
             
 class Loss:
     def calculate(self, output, y):
@@ -109,13 +119,13 @@ class Loss:
             regularization_loss += layer.weight_regularizer_l1 * np.sum(np.abs(layer.weights))
         
         if layer.weight_regularizer_l2 > 0:
-            regularization_loss = layer.weight_regularizer_l2 * np.sum(layer.weights**layer.weights)
+            regularization_loss = layer.weight_regularizer_l2 * np.sum(layer.weights*layer.weights)
         
         if layer.bias_regularizer_l1 > 0:
             regularization_loss += layer.bias_regularizer_l1 * np.sum(np.abs(layer.biases))
         
         if layer.bias_regularizer_l2 > 0:
-            regularization_loss += layer.bias_regularizer_l2 * np.sum(layer.biases**layer.biases)
+            regularization_loss += layer.bias_regularizer_l2 * np.sum(layer.biases*layer.biases)
         
         return regularization_loss
 
