@@ -11,14 +11,38 @@ class Model:
     def add(self, layer):
         self.layers.append(layer)
 
-    def set(self, *, loss, optimizer):
+    def set(self, *, loss, optimizer, accuracy):
         self.loss = loss
         self.optimizer = optimizer
+        self.accuracy = accuracy
     
     def train(self, X, y, *, epochs=1, print_every=1):
+        
+        self.accuracy.init(y)
 
         for epoch in range(1, epochs+1):
             output = self.forward(X)
+
+            data_loss, regularization_loss = self.loss.calculate(output, y)
+            loss = data_loss + regularization_loss
+
+            predictions = self.output_layer_activation.predictions(output)
+            accuracy = self.accuracy.calculate(predictions, y)
+
+            self.optimizer.pre_update_params()
+            for layer in self.trainable_layers:
+                self.optimizer.update_params(layer)
+            self.optimizer.post_update_params()
+            # Print a summary
+            
+            if not epoch % print_every:
+                print ( f'epoch: {epoch} , ' +
+                f'acc: {accuracy :.3f} , ' +
+                f'loss: {loss :.3f} (' +
+                f'data_loss: {data_loss :.3f} , ' +
+                f'reg_loss: {regularization_loss :.3f} ), ' +
+                f'lr: {self.optimizer.current_learning_rate} ' )
+
 
     def finalize(self):
 
@@ -36,16 +60,6 @@ class Model:
                 self.layers[i].prev = self.layers[i-1]
                 self.layers[i].next = self.layers[i+1]
             
-            else:
-                self.layers[i].prev = self.layers[i-1]
-                self.layers[i].next = self.loss
-
-            # If layer contains an attribute called "weights,"
-            # it's a trainable layer -
-            # add it to the list of trainable layers
-            # for cases where we have dropout like layers
-            if hasattr (self.layers[i], 'weights' ):
-                self.trainable_layers.append(self.layers[i]) 
             # The last layer - the next object is the loss
             # Also let's save aside the reference to the last object
             # whose output is the model's output
@@ -53,7 +67,16 @@ class Model:
                 self.layers[i].prev = self.layers[i - 1 ]
                 self.layers[i].next = self.loss
                 self.output_layer_activation = self.layers[i]
-            
+
+            # If layer contains an attribute called "weights,"
+            # it's a trainable layer -
+            # add it to the list of trainable layers
+            # for cases where we have dropout like layers
+            if hasattr (self.layers[i], 'weights' ):
+                self.trainable_layers.append(self.layers[i]) 
+        
+        self.loss.remember_traibable_layers(self.trainable_layers)
+
     def forward(self, X):
         # Call forward method on the input layer
         # this will set the output property that
@@ -69,6 +92,15 @@ class Model:
         # return its output
         return layer.output
 
+    def backward(self, output, y):
+        self.loss.backward(output, y)
+        
+        for layer in reversed(self.layers):
+            layer.backward(layer.next.dinputs)
+        
+        self.backward(output, y)
+
+        
 
 class Accuracy :
     # Calculates an accuracy
@@ -81,6 +113,18 @@ class Accuracy :
         # Return accuracy
         return accuracy
 
+class Accuracy_Regression(Accuracy):
+
+    def __init__(self) -> None:
+        self.precision = None
+    
+    def init(self, y, reinit=False):
+        if self.precision is None or reinit:
+            self.precision = np.std(y) / 250
+    
+    def compare(self, predictions, y):
+        return np.absolute(predictions - y) < self.precision
+    
 
 class Layer_Input:
 
