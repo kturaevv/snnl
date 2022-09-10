@@ -1,4 +1,92 @@
+from asyncore import socket_map
+from random import sample
 import numpy as np
+
+
+class Model:
+
+    def __init__(self):
+        self.layers = []
+    
+    def add(self, layer):
+        self.layers.append(layer)
+
+    def set(self, *, loss, optimizer):
+        self.loss = loss
+        self.optimizer = optimizer
+    
+    def train(self, X, y, *, epochs=1, print_every=1):
+
+        for epoch in range(1, epochs+1):
+            output = self.forward(X)
+
+    def finalize(self):
+
+        self.input_layer = Layer_Input()
+
+        layer_count = len(self.layers)
+
+        for i in range(layer_count):
+
+            if i == 0:
+                self.layers[i].prev = self.input_layer
+                self.layers[i].next = self.layers[i+1]
+            
+            elif i < layer_count - 1:
+                self.layers[i].prev = self.layers[i-1]
+                self.layers[i].next = self.layers[i+1]
+            
+            else:
+                self.layers[i].prev = self.layers[i-1]
+                self.layers[i].next = self.loss
+
+            # If layer contains an attribute called "weights,"
+            # it's a trainable layer -
+            # add it to the list of trainable layers
+            # for cases where we have dropout like layers
+            if hasattr (self.layers[i], 'weights' ):
+                self.trainable_layers.append(self.layers[i]) 
+            # The last layer - the next object is the loss
+            # Also let's save aside the reference to the last object
+            # whose output is the model's output
+            else :
+                self.layers[i].prev = self.layers[i - 1 ]
+                self.layers[i].next = self.loss
+                self.output_layer_activation = self.layers[i]
+            
+    def forward(self, X):
+        # Call forward method on the input layer
+        # this will set the output property that
+        # the first layer in "prev" object is expecting
+        self.input_layer.forward(X)
+
+        # Call forward method of every object in a chain
+        # Pass output of the previous object as a parameter
+        for layer in self.layers:
+            layer.forward(layer.prev.output)
+        
+        # "layer" is now the last object from the list,
+        # return its output
+        return layer.output
+
+
+class Accuracy :
+    # Calculates an accuracy
+    # given predictions and ground truth values
+    def calculate ( self , predictions , y ):
+        # Get comparison results
+        comparisons = self.compare(predictions, y)
+        # Calculate an accuracy
+        accuracy = np.mean(comparisons)
+        # Return accuracy
+        return accuracy
+
+
+class Layer_Input:
+
+    def forward(self, inputs):
+        self.output = inputs
+    
 
 class Layer_Dense:
     def __init__(self, n_inputs, n_neurons,
@@ -70,6 +158,9 @@ class Activation_ReLU:
         self.dinputs = dvalues.copy()
         self.dinputs[self.inputs <= 0 ] = 0
 
+    def predictions(self, outputs):
+        return outputs
+
         
 class Activation_Softmax:
     def forward(self , inputs):
@@ -93,6 +184,9 @@ class Activation_Softmax:
             # and add it to the array of sample gradients
             self.dinputs[index] = np.dot(jacobian_matrix,
             single_dvalues)
+        
+    def predictions(self, outputs):
+        return np.argmax(outputs, axis=1)
 
 
 class Activation_Sigmoid:
@@ -103,33 +197,82 @@ class Activation_Sigmoid:
     
     def backward(self, dvalues):
         self.dinputs = dvalues * (1 - self.output) * self.output
-        
+
+    def predictions(self, outputs):
+        return (outputs > 0.5) * 1
+    
+
+class Activation_Linear:
+
+    def forward(self, inputs):
+        self.inputs = inputs
+        self.output = inputs
+    
+    def backward(self, dvalues):
+        self.dinputs = dvalues.copy()
+
+    def predictions(self, outputs):
+        return outputs
+
             
 class Loss:
+
+    def remember_trainable_layers(self, trainable_layers):
+        self.trainable_layers = trainable_layers
+
     def calculate(self, output, y):
         sample_losses = self.forward(output, y)
         data_loss = np.mean(sample_losses)
         return data_loss
     
-    
     def regularization_loss(self, layer):
         regularization_loss = 0
         
-        if layer.weight_regularizer_l1 > 0:
-            regularization_loss += layer.weight_regularizer_l1 * np.sum(np.abs(layer.weights))
-        
-        if layer.weight_regularizer_l2 > 0:
-            regularization_loss = layer.weight_regularizer_l2 * np.sum(layer.weights*layer.weights)
-        
-        if layer.bias_regularizer_l1 > 0:
-            regularization_loss += layer.bias_regularizer_l1 * np.sum(np.abs(layer.biases))
-        
-        if layer.bias_regularizer_l2 > 0:
-            regularization_loss += layer.bias_regularizer_l2 * np.sum(layer.biases*layer.biases)
-        
+        for layer in self.trainable_layers:
+
+            if layer.weight_regularizer_l1 > 0:
+                regularization_loss += layer.weight_regularizer_l1 * np.sum(np.abs(layer.weights))
+            
+            if layer.weight_regularizer_l2 > 0:
+                regularization_loss = layer.weight_regularizer_l2 * np.sum(layer.weights*layer.weights)
+            
+            if layer.bias_regularizer_l1 > 0:
+                regularization_loss += layer.bias_regularizer_l1 * np.sum(np.abs(layer.biases))
+            
+            if layer.bias_regularizer_l2 > 0:
+                regularization_loss += layer.bias_regularizer_l2 * np.sum(layer.biases*layer.biases)
+            
         return regularization_loss
 
-            
+
+class Loss_MeanSquaredError(Loss):
+
+    def forward(self, y_pred, y_true):
+        sample_loss = np.mean((y_true - y_pred)**2, axis=-1)
+        return sample_loss
+
+    def backward(self, dvalues, y_true):
+        samples = len(dvalues)
+        outputs = len(dvalues[0])
+
+        self.dinputs = -2*(y_true - dvalues) / outputs
+        self.dinputs = self.dinputs / samples
+
+
+class Loss_MeanAbsoluteError(Loss):
+
+    def forward(self, y_pred, y_true):
+        sample_losses = np.mean(np.abs(y_true - y_pred), axis=-1)
+        return sample_losses
+    
+    def backward(self, dvalues, y_true):
+        samples = len(dvalues)
+        outputs = len(dvalues[0])
+
+        self.dinputs = np.sign(y_true - dvalues) / outputs
+        self.dinputs = self.dinputs / samples
+    
+
 class Loss_CategoricalCrossentropy(Loss):
     # Loss function applied to one hot encoded expected values
     # i.e. if at the output only 1 node should be fired up
