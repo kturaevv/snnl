@@ -1,5 +1,6 @@
 from asyncore import socket_map
 from random import sample
+from xml.etree.ElementInclude import include
 import numpy as np
 
 
@@ -16,18 +17,21 @@ class Model:
         self.optimizer = optimizer
         self.accuracy = accuracy
     
-    def train(self, X, y, *, epochs=1, print_every=1):
+    def train(self, X, y, *, epochs=1, print_every=1, validation_data=None):
         
         self.accuracy.init(y)
 
         for epoch in range(1, epochs+1):
             output = self.forward(X)
 
-            data_loss, regularization_loss = self.loss.calculate(output, y)
+            data_loss, regularization_loss = \
+                self.loss.calculate(output, y, include_regularization=True)
             loss = data_loss + regularization_loss
 
             predictions = self.output_layer_activation.predictions(output)
             accuracy = self.accuracy.calculate(predictions, y)
+
+            self.backward(output, y)
 
             self.optimizer.pre_update_params()
             for layer in self.trainable_layers:
@@ -37,18 +41,36 @@ class Model:
             
             if not epoch % print_every:
                 print ( f'epoch: {epoch} , ' +
-                f'acc: {accuracy :.3f} , ' +
-                f'loss: {loss :.3f} (' +
-                f'data_loss: {data_loss :.3f} , ' +
-                f'reg_loss: {regularization_loss :.3f} ), ' +
+                f'acc: {accuracy:.3f} , ' +
+                f'loss: {loss:.3f} (' +
+                f'data_loss: {data_loss:.3f} , ' +
+                f'reg_loss: {regularization_loss:.3f} ), ' +
                 f'lr: {self.optimizer.current_learning_rate} ' )
-
+        
+        # If there is the validation data
+        if validation_data is not None :
+            # For better readability
+            X_val, y_val = validation_data
+            # Perform the forward pass
+            output = self.forward(X_val)
+            # Calculate the loss
+            loss = self.loss.calculate(output, y_val)
+            # Get predictions and calculate an accuracy
+            predictions = self.output_layer_activation.predictions(
+            output)
+            accuracy = self.accuracy.calculate(predictions, y_val)
+            # Print a summary
+            print( f'validation, ' +
+                f'acc: {accuracy:.3f} , ' +
+                f'loss: {loss:.3f} ' )
 
     def finalize(self):
 
         self.input_layer = Layer_Input()
 
         layer_count = len(self.layers)
+
+        self.trainable_layers = []
 
         for i in range(layer_count):
 
@@ -72,10 +94,10 @@ class Model:
             # it's a trainable layer -
             # add it to the list of trainable layers
             # for cases where we have dropout like layers
-            if hasattr (self.layers[i], 'weights' ):
+            if hasattr(self.layers[i], 'weights'):
                 self.trainable_layers.append(self.layers[i]) 
         
-        self.loss.remember_traibable_layers(self.trainable_layers)
+        self.loss.remember_trainable_layers(self.trainable_layers)
 
     def forward(self, X):
         # Call forward method on the input layer
@@ -93,14 +115,14 @@ class Model:
         return layer.output
 
     def backward(self, output, y):
+        # First call backward method on the loss
+        # this will set dinputs property that the last
+        # layer will try to access shortly
         self.loss.backward(output, y)
         
         for layer in reversed(self.layers):
             layer.backward(layer.next.dinputs)
-        
-        self.backward(output, y)
 
-        
 
 class Accuracy :
     # Calculates an accuracy
@@ -110,8 +132,8 @@ class Accuracy :
         comparisons = self.compare(predictions, y)
         # Calculate an accuracy
         accuracy = np.mean(comparisons)
-        # Return accuracy
         return accuracy
+
 
 class Accuracy_Regression(Accuracy):
 
@@ -125,6 +147,16 @@ class Accuracy_Regression(Accuracy):
     def compare(self, predictions, y):
         return np.absolute(predictions - y) < self.precision
     
+
+class Accuracy_Categorical(Accuracy):
+    def init(self, y):
+        pass
+
+    def compare(self, predictions, y):
+        if len(y.shape) == 2:
+            y = np.argmax(y, axis=1)
+        return predictions == y
+
 
 class Layer_Input:
 
@@ -237,7 +269,7 @@ class Activation_Sigmoid:
 
     def forward(self, inputs):
         self.inputs = inputs
-        self.output = 1 / (1 + np.ext(-inputs))
+        self.output = 1 / (1 + np.exp(-inputs))
     
     def backward(self, dvalues):
         self.dinputs = dvalues * (1 - self.output) * self.output
@@ -264,12 +296,17 @@ class Loss:
     def remember_trainable_layers(self, trainable_layers):
         self.trainable_layers = trainable_layers
 
-    def calculate(self, output, y):
+    def calculate(self, output, y, *, include_regularization=False):
         sample_losses = self.forward(output, y)
         data_loss = np.mean(sample_losses)
-        return data_loss
+
+        # If just data loss - return it
+        if not include_regularization:
+            return data_loss    
+
+        return data_loss, self.regularization_loss()
     
-    def regularization_loss(self, layer):
+    def regularization_loss(self):
         regularization_loss = 0
         
         for layer in self.trainable_layers:
@@ -359,7 +396,25 @@ class Loss_CategoricalCrossentropy(Loss):
         self.dinputs = - y_true / dvalues
         self.dinputs = self.dinputs / samples
 
-        
+
+class Loss_BinaryCrossentropy(Loss):
+
+    def forward(self, y_pred, y_true):
+        y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)
+        sample_losses = - (y_true * np.log(y_pred_clipped) + (1 - y_true) * np.log( 1 - y_pred_clipped))
+        sample_losses = np.mean(sample_losses, axis =- 1 )
+        return sample_losses
+    
+    def backward(self, dvalues, y_true):
+        samples = len(dvalues)
+
+        outputs = len(dvalues[0])
+
+        clipped_dvalues = np.clip(dvalues, 1e-7, 1 - 1e-7)
+        self.dinputs = - (y_true / clipped_dvalues - (1 - y_true) / (1 - clipped_dvalues)) / outputs
+        self.dinputs = self.dinputs / samples
+
+
 class Activation_Softmax_Loss_CategoricalCrossentropy:
 
     def __init__ (self):
