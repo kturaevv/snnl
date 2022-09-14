@@ -10,13 +10,41 @@ from .loss import Loss_CategoricalCrossentropy
 from .activation import Activation_Softmax
 from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
 
+from .layer import Layer_Dense, Layer_Input
+
+from .activation import Activation_ReLU, Activation_Softmax
+from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
+
+from .accuracy import Accuracy_Categorical
+
 
 class Model:
 
-    def __init__(self):
+    def __init__(self, problem=None, structure=None):
         self.layers = []
         self.softmax_classifier_output = None
     
+        if problem == 'image' and structure:
+            self.__build__(structure)
+            
+    def __build__(self, struct):
+        # Automatic nn builder, connects and create Layers
+        # Struct hidden layers
+        for i in range(len(struct[:-1])):
+            self.add(Layer_Dense(struct[i], struct[i+1]))
+            self.add(Activation_ReLU())
+            print(struct[i], struct[i+1], i, "PASS", self.layers)
+        # Define output layer
+        self.layers.append(Layer_Dense(struct[-2], struct[-1]))
+        self.layers.append(Activation_Softmax())
+
+        self.set(
+            loss = Loss_CategoricalCrossentropy(),
+            accuracy = Accuracy_Categorical()
+        )
+        self.finalize()
+
+
     def add(self, layer):
         self.layers.append(layer)
 
