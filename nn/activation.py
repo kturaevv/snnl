@@ -1,5 +1,21 @@
 import numpy as np
 
+from abc import ABC, abstractmethod
+
+class Activation(ABC):
+    
+    @abstractmethod
+    def forward(self):
+        pass
+
+    @abstractmethod
+    def backward(self):
+        pass
+
+    @abstractmethod
+    def predictions(self):
+        pass
+
 
 class Activation_ReLU:
     def forward(self, inputs, training):

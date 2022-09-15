@@ -8,7 +8,8 @@ class Layer_Input:
 class Layer_Dense:
     def __init__(self, n_inputs, n_neurons,
                  weight_regularizer_l1 = 0, weight_regularizer_l2 = 0,
-                 bias_regularizer_l1 = 0, bias_regularizer_l2 = 0):
+                 bias_regularizer_l1 = 0, bias_regularizer_l2 = 0,
+                 activation=None):
         
         self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
@@ -18,6 +19,10 @@ class Layer_Dense:
         self.weight_regularizer_l2 = weight_regularizer_l2
         self.bias_regularizer_l1 = bias_regularizer_l1
         self.bias_regularizer_l2 = bias_regularizer_l2
+
+        # Set previous and next layers, for clarity
+        self.prev = None
+        self.next = None
     
     def forward(self, inputs, training):
         self.inputs = inputs

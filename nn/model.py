@@ -17,34 +17,81 @@ from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
 
 from .accuracy import Accuracy_Categorical
 
+from .optimizer import Optimizer_Adam
+
 
 class Model:
 
     def __init__(self, problem=None, structure=None):
         self.layers = []
         self.softmax_classifier_output = None
-    
-        if problem == 'image' and structure:
+        
+        viable_options = ['basic', 'image', 'video', 'regression']
+        
+        if problem and problem not in viable_options:
+            print(f"{problem}, is not a viable option, try one of:")
+            [print('\t- '+ i) for i in viable_options]
+            return
+        elif problem == 'basic' and structure:
             self.__build__(structure)
             
     def __build__(self, struct):
-        # Automatic nn builder, connects and create Layers
-        # Struct hidden layers
-        for i in range(len(struct[:-1])):
-            self.add(Layer_Dense(struct[i], struct[i+1]))
-            self.add(Activation_ReLU())
-            print(struct[i], struct[i+1], i, "PASS", self.layers)
-        # Define output layer
-        self.layers.append(Layer_Dense(struct[-2], struct[-1]))
-        self.layers.append(Activation_Softmax())
+
+        input_layer_index, output_layer_index = 0, len(struct) - 1
+
+        for indx, i in enumerate(struct):
+            if indx == input_layer_index:
+                self.add(Layer_Dense(struct[indx], struct[indx+1]))
+                self.add(Activation_ReLU())
+            elif indx == output_layer_index:
+                self.add(Layer_Dense(struct[indx-1], struct[indx]))
+                self.add(Activation_Softmax())
+            else:
+                self.add(Layer_Dense(i, i))
+                self.add(Activation_ReLU())
 
         self.set(
             loss = Loss_CategoricalCrossentropy(),
-            accuracy = Accuracy_Categorical()
+            accuracy = Accuracy_Categorical(),
+            optimizer = Optimizer_Adam( decay = 5e-5 ),
         )
-        self.finalize()
 
+        self.__compile__()
 
+    def __compile__(self) -> None:        
+        self.input_layer = Layer_Input()
+
+        layer_count = len(self.layers)
+
+        self.trainable_layers = []
+
+        # Connect layers with each other for forward and bacward pass
+        for i in range(layer_count):
+            if i == 0:
+                self.layers[i].prev = self.input_layer
+                self.layers[i].next = self.layers[i+1]
+            elif i < layer_count - 1:
+                self.layers[i].prev = self.layers[i-1]
+                self.layers[i].next = self.layers[i+1]
+            else :
+                self.layers[i].prev = self.layers[i - 1 ]
+                self.layers[i].next = self.loss
+                self.output_layer_activation = self.layers[i]
+
+            # To ignore dropout-like layers
+            if hasattr(self.layers[i], 'weights'):
+                self.trainable_layers.append(self.layers[i]) 
+        
+        if self.loss is not None:
+            self.loss.remember_trainable_layers(self.trainable_layers)
+    
+        # Softmax activation and CCE loss have combined gradient evaluation
+        # which is way faster than calculating them separately
+        if isinstance (self.layers[ - 1 ], Activation_Softmax) and \
+            isinstance (self.loss, Loss_CategoricalCrossentropy):
+            self.softmax_classifier_output = \
+                Activation_Softmax_Loss_CategoricalCrossentropy()
+        
     def add(self, layer):
         self.layers.append(layer)
 
@@ -55,6 +102,8 @@ class Model:
             self.optimizer = optimizer
         if accuracy is not None:
             self.accuracy = accuracy
+        
+        self.__compile__()
     
     def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, validation_data=None):
         # Initialize accuracy object
@@ -123,10 +172,8 @@ class Model:
                 loss = data_loss + regularization_loss
 
                 # Get predictions and calculate an accuracy
-                predictions = self.output_layer_activation.predictions(
-                                  output)
-                accuracy = self.accuracy.calculate(predictions,
-                                                   batch_y)
+                predictions = self.output_layer_activation.predictions(output)
+                accuracy = self.accuracy.calculate(predictions,batch_y)
 
                 # Perform backward pass
                 self.backward(output, batch_y)
@@ -163,82 +210,24 @@ class Model:
         if validation_data is not None:
             self.evaluate(*validation_data, batch_size=batch_size)
 
-    def finalize(self):        
-        self.input_layer = Layer_Input()
-
-        layer_count = len(self.layers)
-
-        self.trainable_layers = []
-
-        for i in range(layer_count):
-
-            if i == 0:
-                self.layers[i].prev = self.input_layer
-                self.layers[i].next = self.layers[i+1]
-            
-            elif i < layer_count - 1:
-                self.layers[i].prev = self.layers[i-1]
-                self.layers[i].next = self.layers[i+1]
-            
-            # The last layer - the next object is the loss
-            # Also let's save aside the reference to the last object
-            # whose output is the model's output
-            else :
-                self.layers[i].prev = self.layers[i - 1 ]
-                self.layers[i].next = self.loss
-                self.output_layer_activation = self.layers[i]
-
-            # If layer contains an attribute called "weights,"
-            # it's a trainable layer -
-            # add it to the list of trainable layers
-            # for cases where we have dropout like layers
-            if hasattr(self.layers[i], 'weights'):
-                self.trainable_layers.append(self.layers[i]) 
-        
-        if self.loss is not None:
-            self.loss.remember_trainable_layers(self.trainable_layers)
-    
-        # If output activation is Softmax and
-        # loss function is Categorical Cross-Entropy
-        # create an object of combined activation
-        # and loss function containing
-        # faster gradient calculation
-        if isinstance (self.layers[ - 1 ], Activation_Softmax) and \
-            isinstance (self.loss, Loss_CategoricalCrossentropy):
-            # Create an object of combined activation
-            # and loss functions
-            self.softmax_classifier_output = \
-                Activation_Softmax_Loss_CategoricalCrossentropy()
-        
     def forward(self, X, training):
-        # Call forward method on the input layer
-        # this will set the output property that
-        # the first layer in "prev" object is expecting
         self.input_layer.forward(X, training)
 
-        # Call forward method of every object in a chain
-        # Pass output of the previous object as a parameter
         for layer in self.layers:
             layer.forward(layer.prev.output, training)
         
-        # "layer" is now the last object from the list,
-        # return its output
+        # "layer" is now the last object from the list
         return layer.output
 
     def backward(self, output, y):
-
-        # If softmax classifier
-        if self.softmax_classifier_output is not None :
-            # First call backward method
-            # on the combined activation/loss
-            # this will set dinputs property
+        # If combined Softmtax activation/CCE loss
+        if self.softmax_classifier_output is not None:
             self.softmax_classifier_output.backward(output, y)
             # Since we'll not call backward method of the last layer
             # which is Softmax activation
             # as we used combined activation/loss
             # object, let's set dinputs in this object
-            self.layers[ - 1 ].dinputs = \
-            self.softmax_classifier_output.dinputs
+            self.layers[-1].dinputs = self.softmax_classifier_output.dinputs
             # Call backward method going through
             # all the objects but last
             # in reversed order passing dinputs as a parameter
@@ -246,9 +235,7 @@ class Model:
                 layer.backward(layer.next.dinputs)
             return
 
-        # First call backward method on the loss
-        # this will set dinputs property that the last
-        # layer will try to access shortly
+        # Calling backward on loss first will set dinput attrs for last layer
         self.loss.backward(output, y)
         
         for layer in reversed(self.layers):
@@ -309,60 +296,40 @@ class Model:
                 f'acc: {validation_accuracy:.3f}, ' +
                 f'loss: {validation_loss:.3f}')
 
-    # Retrieves and returns parameters of trainable layers
     def get_parameters(self):
-
-        # Create a list for parameters
         parameters = []
 
-        # Iterable trainable layers and get their parameters
         for layer in self.trainable_layers:
             parameters.append(layer.get_parameters())
 
-        # Return a list
         return parameters
 
-    # Updates the model with new parameters
     def set_parameters(self, parameters):
 
-        # Iterate over the parameters and layers
-        # and update each layers with each set of the parameters
         for parameter_set, layer in zip(parameters,
                                         self.trainable_layers):
             layer.set_parameters(*parameter_set)
 
-    # Saves the parameters to a file
     def save_parameters(self, path):
 
-        # Open a file in the binary-write mode
-        # and save parameters into it
         with open(path, 'wb') as f:
             pickle.dump(self.get_parameters(), f)
 
-    # Loads the weights and updates a model instance with them
     def load_parameters(self, path):
 
-        # Open file in the binary-read mode,
-        # load weights and update trainable layers
         with open(path, 'rb') as f:
             self.set_parameters(pickle.load(f))
 
-    # Saves the model
     def save(self, path):
 
-        # Make a deep copy of current model instance
         model = copy.deepcopy(self)
 
-        # Reset accumulated values in loss and accuracy objects
         model.loss.new_pass()
         model.accuracy.new_pass()
 
-        # Remove data from the input layer
-        # and gradients from the loss object
         model.input_layer.__dict__.pop('output', None)
         model.loss.__dict__.pop('dinputs', None)
 
-        # For each layer remove inputs, output and dinputs properties
         for layer in model.layers:
             for property in ['inputs', 'output', 'dinputs',
                              'dweights', 'dbiases']:
@@ -372,8 +339,6 @@ class Model:
         with open(path, 'wb') as f:
             pickle.dump(model, f)
 
-
-    # Loads and returns a model
     @staticmethod
     def load(path):
         # Open file in the binary-read mode, load a model
