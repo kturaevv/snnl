@@ -3,7 +3,7 @@ import pickle
 import copy
 
 from .layer import Layer_Input
-from .loss import Loss_CategoricalCrossentropy
+from .loss import Loss, Loss_CategoricalCrossentropy
 
 from .activation import Activation, Activation_Softmax
 from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
@@ -13,7 +13,7 @@ from .layer import Layer_Dense, Layer_Input
 from .activation import Activation_ReLU, Activation_Softmax
 from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
 
-from .accuracy import Accuracy_Categorical
+from .accuracy import Accuracy, Accuracy_Categorical
 
 from .optimizer import Optimizer_Adam
 
@@ -32,25 +32,26 @@ class Model:
             print(f"{problem}, is not a viable option, try one of:")
             [print('\t- '+ i) for i in viable_options]
             return
+
         elif problem == self.BASE and structure:
             self.__build_model__(problem, structure)
             
     def __build_model__(self, problem, struct):
         
-        def build(hidden_layer_activation, output_layer_activation, loss, accuracy, optimizer):
+        def build(hidden_layer_activation: Activation, 
+                    output_layer_activation: Activation, 
+                    loss: Loss, accuracy: Accuracy, optimizer):
 
                 input_layer_index, output_layer_index = 0, len(struct) - 1
 
-                for indx, i in enumerate(struct):
-                    if indx == input_layer_index:
-                        self.add(Layer_Dense(struct[indx], struct[indx+1]))
-                        self.add(hidden_layer_activation())
-                    elif indx == output_layer_index:
-                        self.add(Layer_Dense(struct[indx-1], struct[indx]))
-                        self.add(output_layer_activation())
+                for prev_indx, n_neurons in enumerate(struct[1:]):
+                    # Typically activation vary only on output layer
+                    if prev_indx == len(struct) - 2:
+                        activation = output_layer_activation
                     else:
-                        self.add(Layer_Dense(i, i))
-                        self.add(hidden_layer_activation())
+                        activation = hidden_layer_activation
+
+                    self.add(Layer_Dense(struct[prev_indx], n_neurons, activation=activation()))
 
                 self.set(
                     loss = loss(),
@@ -78,16 +79,16 @@ class Model:
 
         # Connect layers with each other for forward and bacward pass
         for i in range(layer_count):
-            if i == 0:
+            if i == 0: # first layer
                 self.layers[i].prev = self.input_layer
                 self.layers[i].next = self.layers[i+1]
-            elif i < layer_count - 1:
+            elif i < layer_count - 1: # hidden layers
                 self.layers[i].prev = self.layers[i-1]
                 self.layers[i].next = self.layers[i+1]
-            else :
+            else: # output / last layer
                 self.layers[i].prev = self.layers[i - 1 ]
                 self.layers[i].next = self.loss
-                self.output_layer_activation = self.layers[i]
+                self.output_layer = self.layers[i]
 
             # To ignore dropout-like layers
             if hasattr(self.layers[i], 'weights'):
@@ -98,7 +99,7 @@ class Model:
     
         # Softmax activation and CCE loss have combined gradient evaluation
         # which is way faster than calculating them separately
-        if isinstance (self.layers[ - 1 ], Activation_Softmax) and \
+        if isinstance(self.layers[-1].activation, Activation_Softmax) and \
             isinstance (self.loss, Loss_CategoricalCrossentropy):
             self.softmax_classifier_output = \
                 Activation_Softmax_Loss_CategoricalCrossentropy()
@@ -116,7 +117,7 @@ class Model:
         
         self.__compile__()
     
-    def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, validation_data=None):
+    def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, validation_data=None, silent=False):
         # Initialize accuracy object
         self.accuracy.init(y)
 
@@ -183,7 +184,7 @@ class Model:
                 loss = data_loss + regularization_loss
 
                 # Get predictions and calculate an accuracy
-                predictions = self.output_layer_activation.predictions(output)
+                predictions = self.output_layer.activation.predictions(output)
                 accuracy = self.accuracy.calculate(predictions,batch_y)
 
                 # Perform backward pass
@@ -222,10 +223,14 @@ class Model:
             self.evaluate(*validation_data, batch_size=batch_size)
 
     def forward(self, X, training):
-        self.input_layer.forward(X, training)
+        # As input layer does not have activation
+        # it should be computed manually
+        self.input_layer.forward(X)
+        self.layers[0].forward(self.input_layer.output)
 
-        for layer in self.layers:
-            layer.forward(layer.prev.output, training)
+        for layer in self.layers[1:]:
+            # forward propagate with previous layer activation output
+            layer.forward(layer.prev.activation.output, training)
         
         # "layer" is now the last object from the list
         return layer.output
@@ -238,18 +243,22 @@ class Model:
             # which is Softmax activation
             # as we used combined activation/loss
             # object, let's set dinputs in this object
-            self.layers[-1].dinputs = self.softmax_classifier_output.dinputs
+            
+            # self.layers[-1].dinputs = self.softmax_classifier_output.dinputs
+            self.layers[-1].backward(self.softmax_classifier_output.dinputs)
+            
             # Call backward method going through
             # all the objects but last
             # in reversed order passing dinputs as a parameter
-            for layer in reversed (self.layers[: - 1 ]):
+            for layer in reversed(self.layers[:-1]):
                 layer.backward(layer.next.dinputs)
             return
 
         # Calling backward on loss first will set dinput attrs for last layer
         self.loss.backward(output, y)
-        
-        for layer in reversed(self.layers):
+        self.layers[-1].backward(self.loss.dinputs)
+
+        for layer in reversed(self.layers[:-1]):
             layer.backward(layer.next.dinputs)
 
     def evaluate(self, X_val, y_val, *, batch_size=None):
@@ -294,7 +303,7 @@ class Model:
             self.loss.calculate(output, batch_y)
 
             # Get predictions and calculate an accuracy
-            predictions = self.output_layer_activation.predictions(
+            predictions = self.output_layer.activation.predictions(
                                 output)
             self.accuracy.calculate(predictions, batch_y)
 

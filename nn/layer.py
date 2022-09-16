@@ -1,5 +1,11 @@
 from abc import ABC, abstractmethod
+import functools
+from platform import architecture
 import numpy as np
+from typing import Type
+
+
+from nn.activation import Activation
 
 
 class Layer(ABC):
@@ -15,7 +21,10 @@ class Layer(ABC):
 
 class Layer_Input:
 
-    def forward(self, inputs, training):
+    def __init__(self, inputs=None):
+        self.output = inputs
+
+    def forward(self, inputs):
         self.output = inputs
 
     def backward(self):
@@ -23,10 +32,10 @@ class Layer_Input:
 
 
 class Layer_Dense:
-    def __init__(self, n_inputs, n_neurons,
+    def __init__(self, n_inputs, n_neurons, activation: Type[Activation],
                  weight_regularizer_l1 = 0, weight_regularizer_l2 = 0,
                  bias_regularizer_l1 = 0, bias_regularizer_l2 = 0,
-                 activation=None):
+                 ):
         
         self.weights = 0.01 * np.random.randn(n_inputs, n_neurons)
         self.biases = np.zeros((1, n_neurons))
@@ -40,12 +49,33 @@ class Layer_Dense:
         # Set previous and next layers, for clarity
         self.prev = None
         self.next = None
-    
-    def forward(self, inputs, training):
+
+        # Activation function as a decorator
+        self.activation = activation
+
+    def __activation__(function):
+        @functools.wraps(function)
+        def forward(self, inputs, *args, **kwargs):
+            function(self, inputs)
+            return self.activation.forward(inputs = self.output)
+        
+        @functools.wraps(function)
+        def backward(self, dvalues):
+            self.activation.backward(dvalues)
+            return function(self, self.activation.dinputs)
+        
+        if function.__name__ == 'forward':
+            return forward
+        elif function.__name__ == 'backward':
+            return backward
+
+    @__activation__
+    def forward(self, inputs, training=None):
         self.inputs = inputs
         self.output = np.dot(inputs, self.weights) + self.biases
 
-    def backward(self , dvalues):
+    @__activation__
+    def backward(self , dvalues, training=None):
         self.dweights = np.dot(self.inputs.T, dvalues)
         self.dbiases = np.sum(dvalues, axis = 0 , keepdims = True)
 
@@ -96,5 +126,5 @@ class Layer_Dropout :
         # Apply mask to output values
         self.output = inputs * self.binary_mask
 
-    def backward ( self , dvalues ):
+    def backward(self, dvalues):
         self.dinputs = dvalues * self.binary_mask
