@@ -1,5 +1,3 @@
-from inspect import Parameter
-
 import numpy as np
 import pickle
 import copy
@@ -7,7 +5,7 @@ import copy
 from .layer import Layer_Input
 from .loss import Loss_CategoricalCrossentropy
 
-from .activation import Activation_Softmax
+from .activation import Activation, Activation_Softmax
 from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
 
 from .layer import Layer_Dense, Layer_Input
@@ -22,41 +20,54 @@ from .optimizer import Optimizer_Adam
 
 class Model:
 
+    BASE, IMAGE, VIDEO, REGRESSION = 'basic', 'image', 'video', 'regression'
+
     def __init__(self, problem=None, structure=None):
         self.layers = []
         self.softmax_classifier_output = None
         
-        viable_options = ['basic', 'image', 'video', 'regression']
+        viable_options = [self.BASE, self.IMAGE, self.VIDEO, self.REGRESSION]
         
         if problem and problem not in viable_options:
             print(f"{problem}, is not a viable option, try one of:")
             [print('\t- '+ i) for i in viable_options]
             return
-        elif problem == 'basic' and structure:
-            self.__build__(structure)
+        elif problem == self.BASE and structure:
+            self.__build_model__(problem, structure)
             
-    def __build__(self, struct):
+    def __build_model__(self, problem, struct):
+        
+        def build(hidden_layer_activation, output_layer_activation, loss, accuracy, optimizer):
 
-        input_layer_index, output_layer_index = 0, len(struct) - 1
+                input_layer_index, output_layer_index = 0, len(struct) - 1
 
-        for indx, i in enumerate(struct):
-            if indx == input_layer_index:
-                self.add(Layer_Dense(struct[indx], struct[indx+1]))
-                self.add(Activation_ReLU())
-            elif indx == output_layer_index:
-                self.add(Layer_Dense(struct[indx-1], struct[indx]))
-                self.add(Activation_Softmax())
-            else:
-                self.add(Layer_Dense(i, i))
-                self.add(Activation_ReLU())
+                for indx, i in enumerate(struct):
+                    if indx == input_layer_index:
+                        self.add(Layer_Dense(struct[indx], struct[indx+1]))
+                        self.add(hidden_layer_activation())
+                    elif indx == output_layer_index:
+                        self.add(Layer_Dense(struct[indx-1], struct[indx]))
+                        self.add(output_layer_activation())
+                    else:
+                        self.add(Layer_Dense(i, i))
+                        self.add(hidden_layer_activation())
 
-        self.set(
-            loss = Loss_CategoricalCrossentropy(),
-            accuracy = Accuracy_Categorical(),
-            optimizer = Optimizer_Adam( decay = 5e-5 ),
-        )
+                self.set(
+                    loss = loss(),
+                    accuracy = accuracy(),
+                    optimizer = optimizer( decay = 5e-5 ),
+                )
 
-        self.__compile__()
+                self.__compile__()
+    
+        if problem == self.BASE:
+            build(
+                hidden_layer_activation=Activation_ReLU,
+                output_layer_activation=Activation_Softmax,
+                loss=Loss_CategoricalCrossentropy,
+                accuracy=Accuracy_Categorical,
+                optimizer=Optimizer_Adam
+            )
 
     def __compile__(self) -> None:        
         self.input_layer = Layer_Input()

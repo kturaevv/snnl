@@ -1,9 +1,26 @@
+from abc import ABC, abstractmethod
 import numpy as np
 
+
+class Layer(ABC):
+
+    @abstractmethod
+    def forward(self):
+        pass
+
+    @abstractmethod
+    def backward(self):
+        pass
+
+
 class Layer_Input:
+
     def forward(self, inputs, training):
         self.output = inputs
-    
+
+    def backward(self):
+        pass    
+
 
 class Layer_Dense:
     def __init__(self, n_inputs, n_neurons,

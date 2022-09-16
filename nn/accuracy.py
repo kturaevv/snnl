@@ -1,7 +1,17 @@
+from abc import ABC, abstractmethod
 import numpy as np
 
 
-class Accuracy:
+class Accuracy(ABC):
+    
+    @abstractmethod
+    def init(self):
+        pass
+    
+    @abstractmethod
+    def compare(self):
+        pass
+
     # Calculates an accuracy
     # given predictions and ground truth values
     def calculate(self, predictions, y):
