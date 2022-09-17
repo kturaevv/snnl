@@ -1,19 +1,32 @@
+from abc import ABC, abstractmethod
 import numpy as np
 
 
-class Optimizer_SGD:
+class Optimizer(ABC):
+    def __init__(self, decay=0) -> None:
+        self.iterations = 0
+        self.epsilon = 5e-7
+
+    def pre_update_params(self):
+        if self.decay:
+            self.current_learning_rate = self.learning_rate * \
+                    (1. / (1. + self.decay * self.iterations))
+    
+    @abstractmethod
+    def update_params(self):
+        pass
+
+    def post_update_params(self):
+        self.iterations += 1
+
+    
+
+class Optimizer_SGD(Optimizer):
     def __init__(self, learning_rate=1.0, decay=0., momentum=0.):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
-        self.decay = decay
-        self.iterations = 0
         self.momentum = momentum
-        
-    def pre_update_params(self):
-        if self.decay:
-            self.current_learning_rate = \
-                self.learning_rate * (1./(1.+self.decay*self.iterations))
-    
+            
     def update_params(self, layer):
         if self.momentum:
             # if layer does not contain momentum arrays -> create
@@ -40,11 +53,8 @@ class Optimizer_SGD:
         layer.weights += weight_updates
         layer.biases += bias_updates
             
-    def post_update_params(self):
-        self.iterations += 1
 
-
-class Optimizer_Adagrad :
+class Optimizer_Adagrad(Optimizer):
     def __init__ ( self , learning_rate = 1. , decay = 0. , epsilon = 1e-7 ):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
@@ -52,47 +62,34 @@ class Optimizer_Adagrad :
         self.iterations = 0
         self.epsilon = epsilon
 
-    def pre_update_params(self):
-        if self.decay:
-            self.current_learning_rate = self.learning_rate * \
-            ( 1. / ( 1. + self.decay * self.iterations))
-
-    def update_params ( self , layer ):
+    def update_params(self, layer):
         # If layer does not contain cache arrays,
         # create them filled with zeros
         if not hasattr (layer, 'weight_cache' ):
             layer.weight_cache = np.zeros_like(layer.weights)
             layer.bias_cache = np.zeros_like(layer.biases)
+        
         # Update cache with squared current gradients
         layer.weight_cache += layer.dweights ** 2
         layer.bias_cache += layer.dbiases ** 2
+        
         # Vanilla SGD parameter update + normalization
-        # with square rooted cache
-        layer.weights += - self.current_learning_rate * \
-            layer.dweights / \
-            (np.sqrt(layer.weight_cache) + self.epsilon)
-        layer.biases += - self.current_learning_rate * \
-            layer.dbiases / \
-            (np.sqrt(layer.bias_cache) + self.epsilon)
+        layer.weights += - (
+            self.current_learning_rate * layer.dweights / 
+            (np.sqrt(layer.weight_cache) + self.epsilon))
+
+        layer.biases += - (
+            self.current_learning_rate * layer.dbiases / 
+            (np.sqrt(layer.bias_cache) + self.epsilon))
     
-    def post_update_params(self):
-        self.iterations += 1
-    
-class Optimizer_RMSprop:
+class Optimizer_RMSprop(Optimizer):
     
     def __init__(self, learning_rate=0.001, decay=0., epsilon=1e-7, rho=0.9):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
         self.decay = decay
-        self.iterations = 0
         self.epsilon = epsilon
         self.rho = rho
-    
-    # Call once before any parameter updates
-    def pre_update_params (self):
-        if self.decay:
-            self.current_learning_rate = self.learning_rate * \
-            ( 1. / ( 1. + self.decay * self.iterations))
     
     def update_params(self, layer):
         if not hasattr(layer, 'weight_cache'):
@@ -115,22 +112,15 @@ class Optimizer_RMSprop:
         self.iterations += 1
 
 
-class Optimizer_Adam:
+class Optimizer_Adam(Optimizer):
     
     def __init__(self, learning_rate=0.001, decay=0., epsilon=1e-7, beta_1=0.9, beta_2=0.999):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
         self.decay = decay
-        self.iterations = 0
         self.epsilon = epsilon
         self.beta_1 = beta_1
         self.beta_2 = beta_2
-    
-    # Call once before any parameter updates
-    def pre_update_params(self):
-        if self.decay:
-            self.current_learning_rate = self.learning_rate * \
-            ( 1. / ( 1. + self.decay * self.iterations))
     
     def update_params(self, layer):
         if not hasattr(layer, 'weight_cache'):
@@ -169,6 +159,3 @@ class Optimizer_Adam:
             weight_momentums_corrected / (np.sqrt(weight_cache_corrected) + self.epsilon)
         layer.biases += - self.current_learning_rate * \
             bias_momentums_corrected / (np.sqrt(bias_cache_corrected) + self.epsilon)
-    
-    def post_update_params(self):
-        self.iterations += 1
