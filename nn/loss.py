@@ -51,7 +51,7 @@ class Loss:
         self.accumulated_count = 0
 
 
-class Loss_MeanSquaredError(Loss):
+class MeanSquaredError(Loss):
 
     def forward(self, y_pred, y_true):
         sample_loss = np.mean((y_true - y_pred)**2, axis=-1)
@@ -65,7 +65,7 @@ class Loss_MeanSquaredError(Loss):
         self.dinputs = self.dinputs / samples
 
 
-class Loss_MeanAbsoluteError(Loss):
+class MeanAbsoluteError(Loss):
 
     def forward(self, y_pred, y_true):
         sample_losses = np.mean(np.abs(y_true - y_pred), axis=-1)
@@ -79,7 +79,7 @@ class Loss_MeanAbsoluteError(Loss):
         self.dinputs = self.dinputs / samples
     
 
-class Loss_CategoricalCrossentropy(Loss):
+class CategoricalCrossentropy(Loss):
     # Loss function applied to one hot encoded expected values
     # i.e. if at the output only 1 node should be fired up
     
@@ -122,7 +122,7 @@ class Loss_CategoricalCrossentropy(Loss):
         self.dinputs = self.dinputs / samples
 
 
-class Loss_BinaryCrossentropy(Loss):
+class BinaryCrossentropy(Loss):
 
     def forward(self, y_pred, y_true):
         y_pred_clipped = np.clip(y_pred, 1e-7, 1 - 1e-7)

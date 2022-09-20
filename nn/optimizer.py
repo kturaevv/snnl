@@ -21,7 +21,7 @@ class Optimizer(ABC):
         self.iterations += 1
 
 
-class Optimizer_SGD(Optimizer):
+class SGD(Optimizer):
     def __init__(self, learning_rate=1.0, decay=0., momentum=0.):
         self.learning_rate = learning_rate
         self.current_learning_rate = learning_rate
@@ -54,7 +54,7 @@ class Optimizer_SGD(Optimizer):
         layer.biases += bias_updates
             
 
-class Optimizer_Adagrad(Optimizer):
+class Adagrad(Optimizer):
     
     # Optimizer Adaptive gradient, is known for adding new variable to optimization
     # which is weight and bias cache. 
@@ -87,7 +87,7 @@ class Optimizer_Adagrad(Optimizer):
             (np.sqrt(layer.bias_cache) + self.epsilon))
 
 
-class Optimizer_RMSprop(Optimizer_Adagrad):
+class RMSprop(Adagrad):
 
     # The only difference between the classes is cache implementation.
 
@@ -107,7 +107,7 @@ class Optimizer_RMSprop(Optimizer_Adagrad):
         ( 1 - self.rho) * layer.dbiases ** 2
         
 
-class Optimizer_Adam(Optimizer):
+class Adam(Optimizer):
     
     def __init__(self, learning_rate=0.001, decay=0., epsilon=1e-7, beta_1=0.9, beta_2=0.999):
         self.decay = decay
@@ -118,6 +118,8 @@ class Optimizer_Adam(Optimizer):
 
         self.beta_1 = beta_1
         self.beta_2 = beta_2
+
+        self.iterations = 0
     
     def update_params(self, layer):
         if not hasattr(layer, 'weight_cache'):

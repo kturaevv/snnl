@@ -31,7 +31,7 @@ class Layer_Input:
         pass    
 
 
-class Layer_Dense:
+class Dense:
     def __init__(self, n_inputs, n_neurons, activation: Type[Activation],
                  weight_regularizer_l1 = 0, weight_regularizer_l2 = 0,
                  bias_regularizer_l1 = 0, bias_regularizer_l2 = 0,
@@ -108,7 +108,7 @@ class Layer_Dense:
 
 
 # Dropout
-class Layer_Dropout :
+class Dropout :
     def __init__ ( self , rate ):
         # Store rate, we invert it as for example for dropout
         # of 0.1 we need success rate of 0.9

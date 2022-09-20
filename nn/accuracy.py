@@ -34,7 +34,7 @@ class Accuracy(ABC):
         self.accumulated_count = 0
 
 
-class Accuracy_Regression(Accuracy):
+class Regression(Accuracy):
     def __init__(self) -> None:
         self.precision = None
     
@@ -46,7 +46,7 @@ class Accuracy_Regression(Accuracy):
         return np.absolute(predictions - y) < self.precision
     
 
-class Accuracy_Categorical(Accuracy):
+class Categorical(Accuracy):
     def init(self, y):
         pass
 

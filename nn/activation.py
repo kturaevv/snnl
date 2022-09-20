@@ -17,7 +17,7 @@ class Activation(ABC):
         pass
 
 
-class Activation_ReLU(Activation):
+class ReLU(Activation):
     def forward(self, inputs):
         self.inputs = inputs
         self.output = np.maximum(0, inputs)
@@ -30,7 +30,7 @@ class Activation_ReLU(Activation):
         return outputs
 
         
-class Activation_Softmax(Activation):
+class Softmax(Activation):
     def forward(self , inputs):
         self.inputs = inputs
         exp_values = np.exp(inputs - np.max(inputs, axis = 1,keepdims = True))
@@ -54,7 +54,7 @@ class Activation_Softmax(Activation):
         return np.argmax(outputs, axis=1)
 
 
-class Activation_Sigmoid(Activation):
+class Sigmoid(Activation):
 
     def forward(self, inputs):
         self.inputs = inputs
@@ -67,7 +67,7 @@ class Activation_Sigmoid(Activation):
         return (outputs > 0.5) * 1
     
 
-class Activation_Linear(Activation):
+class Linear(Activation):
 
     def forward(self, inputs):
         self.inputs = inputs
@@ -80,7 +80,7 @@ class Activation_Linear(Activation):
         return outputs
 
 
-class Activation_Softmax_Loss_CategoricalCrossentropy(Activation):
+class Softmax_Loss_CategoricalCrossentropy(Activation):
 
     def forward(self,):
         pass

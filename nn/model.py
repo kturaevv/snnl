@@ -3,19 +3,19 @@ import pickle
 import copy
 
 from .layer import Layer_Input
-from .loss import Loss, Loss_CategoricalCrossentropy
+from .loss import Loss, CategoricalCrossentropy
 
-from .activation import Activation, Activation_Softmax
-from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
+from .activation import Activation, Softmax
+from .activation import Softmax_Loss_CategoricalCrossentropy
 
-from .layer import Layer_Dense, Layer_Input
+from .layer import Dense, Layer_Input
 
-from .activation import Activation_ReLU, Activation_Softmax
-from .activation import Activation_Softmax_Loss_CategoricalCrossentropy
+from .activation import ReLU, Softmax
+from .activation import Softmax_Loss_CategoricalCrossentropy
 
-from .accuracy import Accuracy, Accuracy_Categorical
+from .accuracy import Accuracy, Categorical
 
-from .optimizer import Optimizer_Adam
+from .optimizer import Adam
 
 
 class Model:
@@ -51,7 +51,7 @@ class Model:
                     else:
                         activation = hidden_layer_activation
 
-                    self.add(Layer_Dense(struct[prev_indx], n_neurons, activation=activation()))
+                    self.add(Dense(struct[prev_indx], n_neurons, activation=activation()))
 
                 self.set(
                     loss = loss(),
@@ -63,11 +63,11 @@ class Model:
     
         if problem == self.BASE:
             build(
-                hidden_layer_activation=Activation_ReLU,
-                output_layer_activation=Activation_Softmax,
-                loss=Loss_CategoricalCrossentropy,
-                accuracy=Accuracy_Categorical,
-                optimizer=Optimizer_Adam
+                hidden_layer_activation=ReLU,
+                output_layer_activation=Softmax,
+                loss=CategoricalCrossentropy,
+                accuracy=Categorical,
+                optimizer=Adam
             )
 
     def __compile__(self) -> None:        
@@ -99,10 +99,10 @@ class Model:
     
         # Softmax activation and CCE loss have combined gradient evaluation
         # which is way faster than calculating them separately
-        if isinstance(self.layers[-1].activation, Activation_Softmax) and \
-            isinstance (self.loss, Loss_CategoricalCrossentropy):
+        if isinstance(self.layers[-1].activation, Softmax) and \
+            isinstance (self.loss, CategoricalCrossentropy):
             self.softmax_classifier_output = \
-                Activation_Softmax_Loss_CategoricalCrossentropy()
+                Softmax_Loss_CategoricalCrossentropy()
         
     def add(self, layer):
         self.layers.append(layer)
