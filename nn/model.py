@@ -26,7 +26,7 @@ class Model:
         self.layers = []
         self.softmax_classifier_output = None
         
-        viable_options = [self.BASE, self.IMAGE, self.VIDEO, self.REGRESSION]
+        viable_options = (self.BASE, self.IMAGE, self.VIDEO, self.REGRESSION)
         
         if problem and problem not in viable_options:
             print(f"{problem}, is not a viable option, try one of:")
