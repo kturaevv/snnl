@@ -19,7 +19,7 @@ class Layer(ABC):
         pass
 
 
-class Layer_Input:
+class Layer_Input(Layer):
 
     def __init__(self, inputs=None):
         self.output = inputs
@@ -31,7 +31,7 @@ class Layer_Input:
         pass    
 
 
-class Dense:
+class Dense(Layer):
     def __init__(self, n_inputs, n_neurons, activation: Type[Activation],
                  weight_regularizer_l1 = 0, weight_regularizer_l2 = 0,
                  bias_regularizer_l1 = 0, bias_regularizer_l2 = 0,
@@ -54,6 +54,8 @@ class Dense:
         self.activation = activation
 
     def __activation__(function):
+        """ Activation function is rather a wrapper than another layer."""
+
         @functools.wraps(function)
         def forward(self, inputs, *args, **kwargs):
             function(self, inputs)
@@ -75,7 +77,7 @@ class Dense:
         self.output = np.dot(inputs, self.weights) + self.biases
 
     @__activation__
-    def backward(self , dvalues, training=None):
+    def backward(self, dvalues, training=None):
         self.dweights = np.dot(self.inputs.T, dvalues)
         self.dbiases = np.sum(dvalues, axis = 0 , keepdims = True)
 
@@ -108,8 +110,8 @@ class Dense:
 
 
 # Dropout
-class Dropout :
-    def __init__ ( self , rate ):
+class Dropout(Layer):
+    def __init__ (self, rate):
         # Store rate, we invert it as for example for dropout
         # of 0.1 we need success rate of 0.9
         self.rate = 1 - rate
@@ -127,3 +129,68 @@ class Dropout :
 
     def backward(self, dvalues):
         self.dinputs = dvalues * self.binary_mask
+
+
+class BatchNormalization(Layer):
+    
+    def __init__(self, momentum=0.99, eps=0.01, r_mean=None, r_var=None):
+        self.momentum = momentum
+        self.eps = eps
+        self.running_mean = r_mean
+        self.running_var = r_var
+
+        # Initialize the parameters, params to be learned
+        self.weights  = np.ones(self.input_shape) # Gamma as weight, to make layer trainable
+        self.bias = np.zeros(self.input_shape) # Beta as bias
+        
+    def forward(self, inputs, training=True):
+            
+        # Initialize running mean and variance if first run
+        if self.running_mean is None:
+            self.running_mean = np.mean(inputs, axis=0)
+            self.running_var = np.var(inputs, axis=0)
+
+        if training:
+            mean = np.mean(inputs, axis=0)
+            var = np.var(inputs, axis=0)
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var
+        else:
+            mean = self.running_mean
+            var = self.running_var
+
+        # Statistics saved for backward pass
+        # Normalization
+        # x - mean / Standard deviation
+
+        self.X_centered = inputs - mean
+        self.stddev_inv = 1 / np.sqrt(var + self.eps)
+
+        X_norm = self.X_centered * self.stddev_inv
+        self.output = self.weights * X_norm + self.biases
+
+    def backward(self, dvalues):
+        
+        # Save parameters used during the forward pass
+        gamma = self.weights
+
+        X_norm = self.X_centered * self.stddev_inv
+        self.dweights = np.sum(dvalues * X_norm, axis=0)
+        self.dbiases = np.sum(dvalues, axis=0)
+
+        self.gamma = self.gamma_opt.update(self.gamma, self.dweights)
+        self.beta = self.beta_opt.update(self.beta, self.dbiases)
+
+        batch_size = dvalues.shape[0]
+
+        # The gradient of the loss with respect to the layer inputs (use weights and statistics from forward pass)
+        dvalues = (1 / batch_size) * gamma * self.stddev_inv * (
+            batch_size * dvalues
+            - np.sum(dvalues, axis=0)
+            - self.X_centered * self.stddev_inv**2 * np.sum(dvalues * self.X_centered, axis=0)
+            )
+
+        self.dinputs = dvalues
+
+    def output_shape(self):
+        return self.input_shape

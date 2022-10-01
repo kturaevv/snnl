@@ -247,8 +247,8 @@ class Model:
             # self.layers[-1].dinputs = self.softmax_classifier_output.dinputs
             self.layers[-1].backward(self.softmax_classifier_output.dinputs)
             
-            # Call backward method going through
-            # all the objects but last
+            # Call backward method going through all the objects, 
+            # except last, as it was an already combinded loss layer,
             # in reversed order passing dinputs as a parameter
             for layer in reversed(self.layers[:-1]):
                 layer.backward(layer.next.dinputs)
