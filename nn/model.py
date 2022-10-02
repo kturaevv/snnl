@@ -157,16 +157,7 @@ class Model:
             # Iterate over steps
             for step in range(train_steps):
 
-                # If batch size is not set -
-                # train using one step and full dataset
-                if batch_size is None:
-                    batch_X = X
-                    batch_y = y
-
-                # Otherwise slice a batch
-                else:
-                    batch_X = X[step*batch_size:(step+1)*batch_size]
-                    batch_y = y[step*batch_size:(step+1)*batch_size]
+                batch_X, batch_y = self.__slice_batch(X, y, step, batch_size)
 
                 # Perform the forward pass
                 output = self.forward(batch_X, training=True)
@@ -220,6 +211,21 @@ class Model:
         if validation_data is not None:
             self.evaluate(*validation_data, batch_size=batch_size)
 
+    def __slice_batch(self, X, y, step, batch_size):
+        # If batch size is not set train using one step and full dataset
+        if batch_size is None:
+            batch_X = X
+            batch_y = y
+        # Otherwise slice a batch
+        else:
+            from_ = step * batch_size
+            to_ = (step+ 1) * batch_size
+
+            batch_X = X[ from_ : to_ ]
+            batch_y = y[ from_ : to_ ]
+
+        return batch_X, batch_y
+
     def _log_summary(self, step, print_every, train_steps, accuracy, loss, data_loss, regularization_loss, type_):
         # Print a summary
         if not step % print_every or step == train_steps - 1:
@@ -271,16 +277,8 @@ class Model:
 
     def evaluate(self, X_val, y_val, *, batch_size=None):
 
-        # Default value if batch size is not being set
-        validation_steps = 1
-        # Calculate number of steps
-        if batch_size is not None :
-            validation_steps = len (X_val) // batch_size
-            # Dividing rounds down. If there are some remaining
-            # data, but not a full batch, this won't include it
-            # Add `1` to include this not full minibatch
-            if validation_steps * batch_size < len (X_val):
-                validation_steps += 1
+        validation_steps = self.__calculate_steps(X_val, batch_size)
+
         # Reset accumulated values in loss
         # and accuracy objects
         self.loss.new_pass()
@@ -289,20 +287,7 @@ class Model:
         # Iterate over steps
         for step in range(validation_steps):
 
-            # If batch size is not set -
-            # train using one step and full dataset
-            if batch_size is None:
-                batch_X = X_val
-                batch_y = y_val
-
-            # Otherwise slice a batch
-            else:
-                batch_X = X_val[
-                    step*batch_size:(step+1)*batch_size
-                ]
-                batch_y = y_val[
-                    step*batch_size:(step+1)*batch_size
-                ]
+            batch_X, batch_y = self.__slice_batch(X_val, y_val, step, batch_size)
 
             # Perform the forward pass
             output = self.forward(batch_X, training=False)
