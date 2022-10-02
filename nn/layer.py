@@ -58,11 +58,15 @@ class Dense(Layer):
 
         @functools.wraps(function)
         def forward(self, inputs, *args, **kwargs):
+            # Activation for forward propagation passes sequentially
+            # layer.forward -> layer.activation -> layer.output
             function(self, inputs)
             return self.activation.forward(inputs = self.output)
         
         @functools.wraps(function)
         def backward(self, dvalues):
+            # Activation for bacward propagation passes in reversed order
+            # layer.activation -> layer.backward -> layer.output
             self.activation.backward(dvalues)
             return function(self, self.activation.dinputs)
         

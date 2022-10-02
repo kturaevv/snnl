@@ -34,11 +34,11 @@ class Model:
             return
 
         elif problem == self.BASE and structure:
-            self.__build_model__(problem, structure)
+            self.__build(problem, structure)
             
-    def __build_model__(self, problem, struct):
+    def __build(self, problem, struct):
         
-        def build(hidden_layer_activation: Activation, 
+        def model_(hidden_layer_activation: Activation, 
                     output_layer_activation: Activation, 
                     loss: Loss, accuracy: Accuracy, optimizer):
 
@@ -59,10 +59,10 @@ class Model:
                     optimizer = optimizer( decay = 5e-5 ),
                 )
 
-                self.__compile__()
+                self.__compile()
     
         if problem == self.BASE:
-            build(
+            model_(
                 hidden_layer_activation=ReLU,
                 output_layer_activation=Softmax,
                 loss=CategoricalCrossentropy,
@@ -70,7 +70,7 @@ class Model:
                 optimizer=Adam
             )
 
-    def __compile__(self) -> None:        
+    def __compile(self) -> None:        
         self.input_layer = Layer_Input()
 
         layer_count = len(self.layers)
@@ -115,40 +115,34 @@ class Model:
         if accuracy is not None:
             self.accuracy = accuracy
         
-        self.__compile__()
-    
+        self.__compile()
+
+    def __calculate_steps(self, X, batch_size):
+        
+        if batch_size is not None:
+            steps = len(X) // batch_size
+            # Dividing rounds down. If there are some remaining
+            # data but not a full batch, this won't include it
+            # Add `1` to include this not full batch
+            if steps * batch_size < len(X):
+                steps += 1
+            return steps
+        else:
+            # Default value if batch size is not being set
+            return 1
+
     def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, validation_data=None, silent=False):
         # Initialize accuracy object
         self.accuracy.init(y)
 
-        # Default value if batch size is not being set
-        train_steps = 1
-
         # If there is validation data passed,
         # set default number of steps for validation as well
         if validation_data is not None:
-            validation_steps = 1
-
             # For better readability
             X_val, y_val = validation_data
 
-        # Calculate number of steps
-        if batch_size is not None:
-            train_steps = len(X) // batch_size
-            # Dividing rounds down. If there are some remaining
-            # data but not a full batch, this won't include it
-            # Add `1` to include this not full batch
-            if train_steps * batch_size < len(X):
-                train_steps += 1
-
-            if validation_data is not None:
-                validation_steps = len(X_val) // batch_size
-
-                # Dividing rounds down. If there are some remaining
-                # data but nor full batch, this won't include it
-                # Add `1` to include this not full batch
-                if validation_steps * batch_size < len(X_val):
-                    validation_steps += 1
+        train_steps = self.__calculate_steps(X, batch_size)
+        validation_steps = self.__calculate_steps(X_val, batch_size)
 
         # Main training loop
         for epoch in range(1, epochs+1):
@@ -196,14 +190,15 @@ class Model:
                     self.optimizer.update_params(layer)
                 self.optimizer.post_update_params()
 
-                # Print a summary
-                if not step % print_every or step == train_steps - 1:
-                    print(f'step: {step}, ' +
-                          f'acc: {accuracy:.3f}, ' +
-                          f'loss: {loss:.3f} (' +
-                          f'data_loss: {data_loss:.3f}, ' +
-                          f'reg_loss: {regularization_loss:.3f}), ' +
-                          f'lr: {self.optimizer.current_learning_rate}')
+                self._log_summary(
+                    step, 
+                    print_every, 
+                    train_steps, 
+                    accuracy, 
+                    loss, 
+                    data_loss, 
+                    regularization_loss, 
+                    type_='training')
 
             # Get and print epoch loss and accuracy
             epoch_data_loss, epoch_regularization_loss = \
@@ -212,15 +207,28 @@ class Model:
             epoch_loss = epoch_data_loss + epoch_regularization_loss
             epoch_accuracy = self.accuracy.calculate_accumulated()
 
-            print(f'training, ' +
-                  f'acc: {epoch_accuracy:.3f}, ' +
-                  f'loss: {epoch_loss:.3f} (' +
-                  f'data_loss: {epoch_data_loss:.3f}, ' +
-                  f'reg_loss: {epoch_regularization_loss:.3f}), ' +
-                  f'lr: {self.optimizer.current_learning_rate}')
-        
+            self._log_summary(
+                step, 
+                print_every, 
+                train_steps, 
+                epoch_accuracy, 
+                epoch_loss, 
+                epoch_data_loss, 
+                epoch_regularization_loss, 
+                type_='step')
+
         if validation_data is not None:
             self.evaluate(*validation_data, batch_size=batch_size)
+
+    def _log_summary(self, step, print_every, train_steps, accuracy, loss, data_loss, regularization_loss, type_):
+        # Print a summary
+        if not step % print_every or step == train_steps - 1:
+            print(f'{type_}: {step}, ' +
+                    f'acc: {accuracy:.3f}, ' +
+                    f'loss: {loss:.3f} (' +
+                    f'data_loss: {data_loss:.3f}, ' +
+                    f'reg_loss: {regularization_loss:.3f}), ' +
+                    f'lr: {self.optimizer.current_learning_rate}')
 
     def forward(self, X, training):
         # As input layer does not have activation
