@@ -35,74 +35,6 @@ class Model:
 
         elif problem == self.BASE and structure:
             self.__build(problem, structure)
-            
-    def __build(self, problem, struct):
-        
-        def model_(hidden_layer_activation: Activation, 
-                    output_layer_activation: Activation, 
-                    loss: Loss, accuracy: Accuracy, optimizer):
-
-                input_layer_index, output_layer_index = 0, len(struct) - 1
-
-                for prev_indx, n_neurons in enumerate(struct[1:]):
-                    # Typically activation vary only on output layer
-                    if prev_indx == len(struct) - 2:
-                        activation = output_layer_activation
-                    else:
-                        activation = hidden_layer_activation
-
-                    self.add(Dense(struct[prev_indx], n_neurons, activation=activation()))
-
-                self.set(
-                    loss = loss(),
-                    accuracy = accuracy(),
-                    optimizer = optimizer( decay = 5e-5 ),
-                )
-
-                self.__compile()
-    
-        if problem == self.BASE:
-            model_(
-                hidden_layer_activation=ReLU,
-                output_layer_activation=Softmax,
-                loss=CategoricalCrossentropy,
-                accuracy=Categorical,
-                optimizer=Adam
-            )
-
-    def __compile(self) -> None:        
-        self.input_layer = Layer_Input()
-
-        layer_count = len(self.layers)
-
-        self.trainable_layers = []
-
-        # Connect layers with each other for forward and bacward pass
-        for i in range(layer_count):
-            if i == 0: # first layer
-                self.layers[i].prev = self.input_layer
-                self.layers[i].next = self.layers[i+1]
-            elif i < layer_count - 1: # hidden layers
-                self.layers[i].prev = self.layers[i-1]
-                self.layers[i].next = self.layers[i+1]
-            else: # output / last layer
-                self.layers[i].prev = self.layers[i - 1 ]
-                self.layers[i].next = self.loss
-                self.output_layer = self.layers[i]
-
-            # To ignore dropout-like layers
-            if hasattr(self.layers[i], 'weights'):
-                self.trainable_layers.append(self.layers[i]) 
-        
-        if self.loss is not None:
-            self.loss.remember_trainable_layers(self.trainable_layers)
-    
-        # Softmax activation and CCE loss have combined gradient evaluation
-        # which is way faster than calculating them separately
-        if isinstance(self.layers[-1].activation, Softmax) and \
-            isinstance (self.loss, CategoricalCrossentropy):
-            self.softmax_classifier_output = \
-                Softmax_Loss_CategoricalCrossentropy()
         
     def add(self, layer):
         self.layers.append(layer)
@@ -116,20 +48,6 @@ class Model:
             self.accuracy = accuracy
         
         self.__compile()
-
-    def __calculate_steps(self, X, batch_size):
-        
-        if batch_size is not None:
-            steps = len(X) // batch_size
-            # Dividing rounds down. If there are some remaining
-            # data but not a full batch, this won't include it
-            # Add `1` to include this not full batch
-            if steps * batch_size < len(X):
-                steps += 1
-            return steps
-        else:
-            # Default value if batch size is not being set
-            return 1
 
     def train(self, X, y, *, epochs=1, batch_size=None, print_every=1, validation_data=None, silent=False):
         # Initialize accuracy object
@@ -210,31 +128,6 @@ class Model:
 
         if validation_data is not None:
             self.evaluate(*validation_data, batch_size=batch_size)
-
-    def __slice_batch(self, X, y, step, batch_size):
-        # If batch size is not set train using one step and full dataset
-        if batch_size is None:
-            batch_X = X
-            batch_y = y
-        # Otherwise slice a batch
-        else:
-            from_ = step * batch_size
-            to_ = (step+ 1) * batch_size
-
-            batch_X = X[ from_ : to_ ]
-            batch_y = y[ from_ : to_ ]
-
-        return batch_X, batch_y
-
-    def _log_summary(self, step, print_every, train_steps, accuracy, loss, data_loss, regularization_loss, type_):
-        # Print a summary
-        if not step % print_every or step == train_steps - 1:
-            print(f'{type_}: {step}, ' +
-                    f'acc: {accuracy:.3f}, ' +
-                    f'loss: {loss:.3f} (' +
-                    f'data_loss: {data_loss:.3f}, ' +
-                    f'reg_loss: {regularization_loss:.3f}), ' +
-                    f'lr: {self.optimizer.current_learning_rate}')
 
     def forward(self, X, training):
         # As input layer does not have activation
@@ -351,7 +244,7 @@ class Model:
         # Open a file in the binary-write mode and save the model
         with open(path, 'wb') as f:
             pickle.dump(model, f)
-
+    
     @staticmethod
     def load(path):
         # Open file in the binary-read mode, load a model
@@ -360,3 +253,110 @@ class Model:
 
         # Return a model
         return model
+        
+    def __build(self, problem, struct):
+        
+        def model_(hidden_layer_activation: Activation, 
+                    output_layer_activation: Activation, 
+                    loss: Loss, accuracy: Accuracy, optimizer):
+
+                input_layer_index, output_layer_index = 0, len(struct) - 1
+
+                for prev_indx, n_neurons in enumerate(struct[1:]):
+                    # Typically activation vary only on output layer
+                    if prev_indx == len(struct) - 2:
+                        activation = output_layer_activation
+                    else:
+                        activation = hidden_layer_activation
+
+                    self.add(Dense(struct[prev_indx], n_neurons, activation=activation()))
+
+                self.set(
+                    loss = loss(),
+                    accuracy = accuracy(),
+                    optimizer = optimizer( decay = 5e-5 ),
+                )
+
+                self.__compile()
+    
+        if problem == self.BASE:
+            model_(
+                hidden_layer_activation=ReLU,
+                output_layer_activation=Softmax,
+                loss=CategoricalCrossentropy,
+                accuracy=Categorical,
+                optimizer=Adam
+            )
+
+    def __compile(self) -> None:        
+        self.input_layer = Layer_Input()
+
+        layer_count = len(self.layers)
+
+        self.trainable_layers = []
+
+        # Connect layers with each other for forward and bacward pass
+        for i in range(layer_count):
+            if i == 0: # first layer
+                self.layers[i].prev = self.input_layer
+                self.layers[i].next = self.layers[i+1]
+            elif i < layer_count - 1: # hidden layers
+                self.layers[i].prev = self.layers[i-1]
+                self.layers[i].next = self.layers[i+1]
+            else: # output / last layer
+                self.layers[i].prev = self.layers[i - 1 ]
+                self.layers[i].next = self.loss
+                self.output_layer = self.layers[i]
+
+            # To ignore dropout-like layers
+            if hasattr(self.layers[i], 'weights'):
+                self.trainable_layers.append(self.layers[i]) 
+        
+        if self.loss is not None:
+            self.loss.remember_trainable_layers(self.trainable_layers)
+    
+        # Softmax activation and CCE loss have combined gradient evaluation
+        # which is way faster than calculating them separately
+        if isinstance(self.layers[-1].activation, Softmax) and \
+            isinstance (self.loss, CategoricalCrossentropy):
+            self.softmax_classifier_output = \
+                Softmax_Loss_CategoricalCrossentropy()
+        
+    def __calculate_steps(self, X, batch_size):
+        
+        if batch_size is not None:
+            steps = len(X) // batch_size
+            # Dividing rounds down. If there are some remaining
+            # data but not a full batch, this won't include it
+            # Add `1` to include this not full batch
+            if steps * batch_size < len(X):
+                steps += 1
+            return steps
+        else:
+            # Default value if batch size is not being set
+            return 1
+
+    def __slice_batch(self, X, y, step, batch_size):
+        # If batch size is not set train using one step and full dataset
+        if batch_size is None:
+            batch_X = X
+            batch_y = y
+        # Otherwise slice a batch
+        else:
+            from_ = step * batch_size
+            to_ = (step+ 1) * batch_size
+
+            batch_X = X[ from_ : to_ ]
+            batch_y = y[ from_ : to_ ]
+
+        return batch_X, batch_y
+
+    def _log_summary(self, step, print_every, train_steps, accuracy, loss, data_loss, regularization_loss, type_):
+        # Print a summary
+        if not step % print_every or step == train_steps - 1:
+            print(f'{type_}: {step}, ' +
+                    f'acc: {accuracy:.3f}, ' +
+                    f'loss: {loss:.3f} (' +
+                    f'data_loss: {data_loss:.3f}, ' +
+                    f'reg_loss: {regularization_loss:.3f}), ' +
+                    f'lr: {self.optimizer.current_learning_rate}')
