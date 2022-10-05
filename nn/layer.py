@@ -182,9 +182,6 @@ class BatchNormalization(Layer):
         self.dweights = np.sum(dvalues * X_norm, axis=0)
         self.dbiases = np.sum(dvalues, axis=0)
 
-        self.gamma = self.gamma_opt.update(self.gamma, self.dweights)
-        self.beta = self.beta_opt.update(self.beta, self.dbiases)
-
         batch_size = dvalues.shape[0]
 
         # The gradient of the loss with respect to the layer inputs (use weights and statistics from forward pass)
