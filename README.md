@@ -15,10 +15,6 @@ The library has following components:
  - [Accuracy metrics](nn_mini/nn/accuracy.py) ( Regression, Categorical )
  - [Model](nn_mini/nn/model.py) ( compile, build, evaluate, fit, log )
 
-## Benchmark
-
-To see whether the model works, the model have been compared with PyTorch and Tensorflow Keras, on fashion_MNIST dataset.
-
 ## Installation
     $ git clone https://github.com/kturaevv/nn_mini
     $ cd nn_mini
@@ -66,4 +62,26 @@ model_manual.train(*args, **kwargs)
 
 *Note: first 2 input arguments of each layer correspond to number of weights each neuron should have in a layer. This is done to make the layer setting more explicit and implicitly refer to the way tensors are calculated ( A dot product between 2D matrices. )*
 
+It is also possible to mix mentioned methods. Using template like structure for most similar layers and then editing or adding new elements where needed. 
+This is possible because the model contains all layers in a `model.layers` and all trainable layers in `model.trainable_layers`.  Pseudocode:
 
+```py
+# Setting general structure
+model = Model('basic', [*network_structure_and_size])
+
+# Structure editing
+model.layers[index].activation = new_activation_function
+    ... # other layer editing statements
+
+# This will still work, practically overriding default components
+model.set(optimizer=nn.optimizer.SGD) # will set SGD instead of Adam
+
+model.train(*args, **kwargs)
+```
+
+Each component is loosely coupled, thus, it is also possible to build model piece by piece, following PyTorch design conventions.
+
+## Benchmark
+
+To see whether the model works, the model have been [compared](https://github.com/kturaevv/nn_mini/blob/main/examples/fashion_mnist/basic_comparison.ipynb
+) with PyTorch and Tensorflow Keras, on fashion_MNIST dataset:
