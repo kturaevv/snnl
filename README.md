@@ -8,12 +8,12 @@ Barebone neural network library, written with python and numpy only.
 The idea behind this project is to study innerworkings of deep learning algorithms and different neural netowork structures. 
 
 The library has following components:
- - [Layers](https://github.com/kturaevv/nn_mini/blob/main/nn/layer.py) ( Dense, Dropout, BatchNorm )
+ - [Layers](nn/layer.py) ( Dense, Dropout, BatchNorm )
  - [Activations](nn/activation.py) ( ReLu, Softmax, Sigmoid, Linear )
- - [Loss](nn_mini/nn/loss.py) ( MSE, MAE, Categorical Cross entropy, Binary Cross entropy )
- - [Optimizers](nn_mini/nn/optimizer.py) ( SGD, Adagrad, RMSprop, Adam )
- - [Accuracy metrics](nn_mini/nn/accuracy.py) ( Regression, Categorical )
- - [Model](nn_mini/nn/model.py) ( compile, build, evaluate, fit, log )
+ - [Loss](nn/loss.py) ( MSE, MAE, Categorical Cross entropy, Binary Cross entropy )
+ - [Optimizers](nn/optimizer.py) ( SGD, Adagrad, RMSprop, Adam )
+ - [Accuracy metrics](nn/accuracy.py) ( Regression, Categorical )
+ - [Model](nn/model.py) ( compile, build, evaluate, fit, log )
 
 ## Installation
     $ git clone https://github.com/kturaevv/nn_mini
